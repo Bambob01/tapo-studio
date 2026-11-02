@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tapo-studio"
+dynamic = ["version"]
+description = "Local web app with far more control than the Tapo app for TP-Link Tapo L930/L920 light strips, plus basic control of other Tapo lights."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE", "NOTICE.md"]
+authors = [{ name = "Tapo Studio contributors" }]
+keywords = ["tapo", "tp-link", "led-strip", "rgbic", "l930", "smart-home", "music-reactive", "ambilight"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Home Automation",
+]
+dependencies = [
+    "tapo>=0.12,<0.13",
+    "starlette>=1.0,<2",
+    "uvicorn>=0.30,<1",
+    "numpy>=2.0,<3",
+]
+
+[project.optional-dependencies]
+music = ["soundcard>=0.4.3,<0.5"]
+screen = ["mss>=9,<11"]
+all = ["soundcard>=0.4.3,<0.5", "mss>=9,<11"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+tapo-studio = "tapo_studio.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/Bambob01/tapo-studio"
+Issues = "https://github.com/Bambob01/tapo-studio/issues"
+
+[tool.setuptools.packages.find]
+include = ["tapo_studio*"]
+
+[tool.setuptools.package-data]
+tapo_studio = ["static/*", "data/*.json"]
+
+[tool.setuptools.dynamic]
+version = { attr = "tapo_studio.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

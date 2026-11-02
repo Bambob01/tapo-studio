@@ -1,0 +1,44 @@
+name: Compatibility report
+description: Tell us whether Tapo Studio works with your light model
+title: "[Compatibility] "
+labels: [compatibility]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Reports like this are how the supported-devices table in the README gets verified. Thank you!
+  - type: dropdown
+    id: model
+    attributes:
+      label: Light model
+      options: [L930, L920, L900, L430, L530, L535, L630, L510, L520, L610, Other]
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware version
+  - type: dropdown
+    id: result
+    attributes:
+      label: Overall result
+      options: [Everything I tried works, Mostly works, Connects but little works, Doesn't connect]
+    validations:
+      required: true
+  - type: checkboxes
+    id: worked
+    attributes:
+      label: What worked
+      options:
+        - label: Connecting / discovery
+        - label: On / off and brightness
+        - label: Colour
+        - label: White temperature
+        - label: Paint zones (strips)
+        - label: Effects and scenes (strips)
+        - label: Smart music
+        - label: Screen sync
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else

@@ -1,0 +1,48 @@
+name: Bug report
+description: Something doesn't work
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping! **Before you post, remove your Tapo email, password, and (if you prefer) your IP addresses from anything you paste.**
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: dropdown
+    id: model
+    attributes:
+      label: Light model
+      options: [L930, L920, L900, L430, L530, L535, L630, L510, L520, L610, Other]
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware version
+      description: Tapo app → your light → Settings → Device Info
+  - type: dropdown
+    id: compat
+    attributes:
+      label: Tapo app "Third-Party Compatibility" setting (Me → Third-Party Services)
+      options: [Off, On, Not sure]
+  - type: input
+    id: version
+    attributes:
+      label: Tapo Studio version
+      description: Shown in the start-up window, or `pip show tapo-studio`
+  - type: input
+    id: os
+    attributes:
+      label: Operating system and Python version
+      placeholder: Windows 11, Python 3.12
+  - type: textarea
+    id: log
+    attributes:
+      label: Log output
+      description: Paste the report from Settings → Troubleshooting → Run diagnostics, plus any text from the black window (run with `--debug` for more detail)
+      render: shell

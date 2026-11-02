@@ -1,0 +1,3 @@
+# Optional: music mode (listens to what's playing on your PC) and screen sync.
+soundcard>=0.4.3,<0.5
+mss>=9,<11

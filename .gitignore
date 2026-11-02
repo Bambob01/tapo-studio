@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+
+# App data (never commit these: they contain your Tapo email and encrypted login)
+userdata/
+userdata-demo/
+settings.json
+*.broken.json
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

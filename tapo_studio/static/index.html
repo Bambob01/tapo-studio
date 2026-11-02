@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Tapo Studio</title>
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/app.css">
+<script type="module" src="/static/app.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to controls</a>
+<header class="top">
+  <div class="brand"><img src="/static/icon.svg" alt="" width="28" height="28"><span>Tapo Studio</span><span id="demoBadge" class="badge" hidden>Demo mode</span></div>
+  <fieldset class="targets" id="targets" aria-describedby="targetsHelp">
+    <legend>Control</legend>
+    <span id="targetsHelp" class="sr-only">Choose which light strips your changes apply to</span>
+  </fieldset>
+  <div class="power">
+    <button type="button" id="btnOn" class="btn">Turn on</button>
+    <button type="button" id="btnOff" class="btn">Turn off</button>
+    <label class="bright">Brightness <input type="range" id="brightness" min="1" max="100" value="100" aria-valuetext="100%"><output id="brightnessOut">100%</output></label>
+  </div>
+</header>
+
+<div class="preview" aria-hidden="true"><div id="stripPreview" class="strip"></div><span id="previewLabel" class="muted"></span></div>
+
+<nav class="tabs" role="tablist" aria-label="Sections">
+  <button role="tab" id="tab-home" aria-controls="panel-home" aria-selected="true">Colour</button>
+  <button role="tab" id="tab-paint" data-cap="zones" aria-controls="panel-paint" aria-selected="false" tabindex="-1">Paint zones</button>
+  <button role="tab" id="tab-effects" data-cap="effects" aria-controls="panel-effects" aria-selected="false" tabindex="-1">Effects</button>
+  <button role="tab" id="tab-scenes" aria-controls="panel-scenes" aria-selected="false" tabindex="-1">Scenes &amp; playlists</button>
+  <button role="tab" id="tab-live" aria-controls="panel-live" aria-selected="false" tabindex="-1">Live (music, screen)</button>
+  <button role="tab" id="tab-schedules" aria-controls="panel-schedules" aria-selected="false" tabindex="-1">Schedules</button>
+  <button role="tab" id="tab-settings" aria-controls="panel-settings" aria-selected="false" tabindex="-1">Settings</button>
+</nav>
+
+<main id="main">
+<div id="banner" class="banner" role="alert" hidden></div>
+
+<!-- COLOUR -->
+<section role="tabpanel" id="panel-home" aria-labelledby="tab-home" class="panel">
+  <div class="grid2">
+    <div class="card" data-cap="color">
+      <h2>Colour</h2>
+      <label class="row">Pick a colour <input type="color" id="colorPick" value="#ff6a3d"></label>
+      <div class="swatches" id="quickColors" role="group" aria-label="Quick colours"></div>
+      <button type="button" class="btn primary" id="applyColor">Set to this colour</button>
+    </div>
+    <div class="card" data-cap="white">
+      <h2>White light</h2>
+      <label class="row">Warmth <input type="range" id="kelvin" min="2500" max="6500" step="100" value="3500"><output id="kelvinOut">3500 K</output></label>
+      <div class="swatches" role="group" aria-label="White presets">
+        <button type="button" class="btn small" data-k="2700">Warm</button>
+        <button type="button" class="btn small" data-k="4000">Neutral</button>
+        <button type="button" class="btn small" data-k="5500">Daylight</button>
+        <button type="button" class="btn small" data-k="6500">Cool</button>
+      </div>
+      <button type="button" class="btn primary" id="applyWhite">Set white light</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>My scenes</h2>
+    <p class="muted">Anything you save from the other tabs appears here for one-click use.</p>
+    <div id="homeScenes" class="tiles"></div>
+  </div>
+  <div class="card">
+    <h2>Lights</h2>
+    <div id="stripCards" class="tiles"></div>
+  </div>
+</section>
+
+<!-- PAINT -->
+<section role="tabpanel" id="panel-paint" aria-labelledby="tab-paint" class="panel" hidden>
+  <div class="card">
+    <h2>Paint individual zones</h2>
+    <p class="muted">Each square is one 10 cm zone of the strip. Click or drag to paint. Keyboard: arrow keys to move, Space or Enter to paint.</p>
+    <div class="paintbar">
+      <label class="row">Brush <input type="color" id="brush" value="#00c3ff"></label>
+      <label class="row">Brush brightness <input type="range" id="brushBri" min="0" max="100" value="100"><output id="brushBriOut">100%</output></label>
+      <fieldset class="seg"><legend>Tool</legend>
+        <label><input type="radio" name="tool" value="brush" checked> Brush</label>
+        <label><input type="radio" name="tool" value="pick"> Pick colour</label>
+        <label><input type="radio" name="tool" value="off"> Turn zone off</label>
+      </fieldset>
+    </div>
+    <div id="zones" class="zones" role="grid" aria-label="Strip zones"></div>
+    <div class="toolbar" role="group" aria-label="Pattern tools">
+      <button type="button" class="btn small" data-tool="fill">Fill all with brush</button>
+      <button type="button" class="btn small" data-tool="left">Shift left</button>
+      <button type="button" class="btn small" data-tool="right">Shift right</button>
+      <button type="button" class="btn small" data-tool="mirror">Mirror halves</button>
+      <button type="button" class="btn small" data-tool="reverse">Reverse</button>
+      <button type="button" class="btn small" data-tool="random">Random from palette</button>
+      <button type="button" class="btn small" data-tool="clear">All off</button>
+      <button type="button" class="btn small" data-tool="undo">Undo</button>
+    </div>
+    <div class="paintbar">
+      <label class="row"><input type="checkbox" id="livePaint" checked> Send to strip as I paint</label>
+      <label class="row">Fade time <input type="number" id="paintFade" min="0" max="5000" step="50" value="300"> ms</label>
+      <button type="button" class="btn primary" id="sendPaint">Send to strip</button>
+      <button type="button" class="btn" id="savePaint">Save as scene</button>
+    </div>
+    <p id="paintStatus" class="status" role="status" aria-live="polite">Nothing sent yet. After each send, the strip is asked whether it is really showing the pattern.</p>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <h2>Gradient</h2>
+      <p class="muted">Blends in a perceptual colour space, so fades stay vivid instead of going muddy.</p>
+      <div id="gradStops" class="stops"></div>
+      <div class="toolbar">
+        <button type="button" class="btn small" id="addStop">Add colour</button>
+        <label class="row"><input type="checkbox" id="gradLoop"> Loop back to first colour</label>
+        <label class="row">Repeat <input type="number" id="gradRepeat" min="1" max="10" value="1"> times</label>
+      </div>
+      <button type="button" class="btn primary" id="applyGrad">Paint gradient</button>
+    </div>
+    <div class="card">
+      <h2>Palettes</h2>
+      <label class="row">Palette <select id="paletteSel"></select></label>
+      <div id="palettePreview" class="strip small"></div>
+      <div class="toolbar">
+        <button type="button" class="btn small" id="palGrad">Paint as gradient</button>
+        <button type="button" class="btn small" id="palToStops">Edit in gradient</button>
+      </div>
+      <h3>Palette from a photo</h3>
+      <p class="muted">Pick an image and the app pulls out its main colours. The image stays on your PC.</p>
+      <input type="file" id="palImage" accept="image/*" aria-label="Choose an image for a palette">
+      <div id="imgPalette" class="swatches"></div>
+      <div class="toolbar">
+        <label class="row">Name <input type="text" id="palName" maxlength="40" value="My palette"></label>
+        <button type="button" class="btn small" id="savePalette">Save gradient colours as palette</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- EFFECTS -->
+<section role="tabpanel" id="panel-effects" aria-labelledby="tab-effects" class="panel" hidden>
+  <div class="grid2">
+    <div class="card">
+      <h2>Effect library</h2>
+      <p class="muted">These animations run on the strip itself, so they're perfectly smooth. Choose "Edit a copy" to change any of them.</p>
+      <h3>TP-Link effects</h3><div id="fxPresets" class="tiles"></div>
+      <h3>Studio extras</h3><div id="fxStudio" class="tiles"></div>
+      <h3>My effects</h3><div id="fxMine" class="tiles"><p class="muted">None yet. Make one in the editor.</p></div>
+    </div>
+    <div class="card">
+      <h2>Effect editor</h2>
+      <form id="fxForm" class="form">
+        <label>Name <input type="text" id="fxName" maxlength="40" value="My effect" required></label>
+        <label>Type
+          <select id="fxType">
+            <option value="sequence">Sequence (colours move along the strip)</option>
+            <option value="random">Random (twinkles / flicker)</option>
+            <option value="pulse">Pulse (whole-strip steps, e.g. sunrise)</option>
+            <option value="static">Static (fixed pattern)</option>
+          </select>
+        </label>
+        <label>Brightness <input type="range" id="fxBri" min="1" max="100" value="100"></label>
+        <fieldset><legend>Colours <span class="muted">(no 8-colour limit)</span></legend>
+          <div id="fxColors" class="stops"></div>
+          <button type="button" class="btn small" id="fxAddColor">Add colour</button>
+          <button type="button" class="btn small" id="fxFromPalette">Use current palette</button>
+        </fieldset>
+        <div id="fxFields" class="fields"></div>
+        <details><summary>Advanced: raw settings (JSON)</summary>
+          <p class="muted">Exactly what gets sent to the strip. You can paste effect JSON here and press Load.</p>
+          <textarea id="fxJson" rows="10" spellcheck="false" aria-label="Effect JSON"></textarea>
+          <div class="toolbar"><button type="button" class="btn small" id="fxJsonLoad">Load JSON into editor</button>
+          <button type="button" class="btn small" id="fxJsonShow">Show current settings</button></div>
+        </details>
+        <div class="toolbar">
+          <button type="submit" class="btn primary">Play on strip</button>
+          <button type="button" class="btn" id="fxSave">Save to My effects</button>
+          <button type="button" class="btn" id="fxScene">Save as scene</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- SCENES -->
+<section role="tabpanel" id="panel-scenes" aria-labelledby="tab-scenes" class="panel" hidden>
+  <div class="card" data-cap="effects">
+    <h2>Built-in scene animations</h2>
+    <p class="muted">The 55 newer animated scenes stored in the strip's firmware.</p>
+    <label class="row">Filter <input type="search" id="segFilter" placeholder="e.g. party"></label>
+    <div id="segPresets" class="tiles"></div>
+  </div>
+  <div class="grid2">
+    <div class="card" data-cap="effects">
+      <h2>Custom scene animation</h2>
+      <form id="segForm" class="form">
+        <label>Name <input type="text" id="segName" maxlength="40" value="My scene"></label>
+        <label>Style <select id="segType"></select></label>
+        <label>Brightness <input type="range" id="segBri" min="1" max="100" value="100"></label>
+        <fieldset><legend>Colours</legend><div id="segColors" class="stops"></div>
+          <button type="button" class="btn small" id="segAdd">Add colour</button></fieldset>
+        <div class="toolbar">
+          <button type="submit" class="btn primary">Play on strip</button>
+          <button type="button" class="btn" id="segSave">Save as scene</button>
+        </div>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Playlists</h2>
+      <p class="muted">Cycle through your saved scenes automatically.</p>
+      <div id="playlists" class="list"></div>
+      <form id="plForm" class="form">
+        <h3>New playlist</h3>
+        <label>Name <input type="text" id="plName" maxlength="40" value="Evening mix"></label>
+        <label class="row"><input type="checkbox" id="plShuffle"> Shuffle</label>
+        <div id="plSteps" class="list"></div>
+        <button type="button" class="btn small" id="plAdd">Add step</button>
+        <button type="submit" class="btn primary">Save playlist</button>
+      </form>
+    </div>
+  </div>
+  <div class="card">
+    <h2>All saved scenes</h2>
+    <div id="sceneList" class="list"></div>
+  </div>
+</section>
+
+<!-- LIVE -->
+<section role="tabpanel" id="panel-live" aria-labelledby="tab-live" class="panel" hidden>
+  <div class="card">
+    <h2>Live modes</h2>
+    <p class="muted">These are driven by your PC. The strip can only take about 3 updates a second, so the app sends the newest frame each time and lets the strip fade between them.</p>
+    <div id="liveStatus" class="status" role="status" aria-live="polite">Nothing running.</div>
+    <p id="liveNote" class="muted" hidden>Bulbs and other single-zone lights show the <em>average</em> colour of each frame.</p>
+    <fieldset class="seg big"><legend>Mode</legend>
+      <label><input type="radio" name="liveMode" value="music" checked> Smart music</label>
+      <label><input type="radio" name="liveMode" value="screen"> Screen sync</label>
+      <label><input type="radio" name="liveMode" value="animation"> Animations</label>
+      <label><input type="radio" name="liveMode" value="daylight"> Daylight white</label>
+    </fieldset>
+    <div class="toolbar">
+      <button type="button" class="btn primary" id="liveStart">Start</button>
+      <button type="button" class="btn" id="liveStop">Stop</button>
+    </div>
+  </div>
+  <div class="card" data-mode="music">
+    <h2>Smart music</h2>
+    <div class="meters" aria-label="Music analysis">
+      <div class="meter"><span>Bass / kick</span><div class="bar"><i id="mBass"></i></div><b id="hBass" class="hit">●</b></div>
+      <div class="meter"><span>Snare</span><div class="bar"><i id="mSnare"></i></div><b id="hSnare" class="hit">●</b></div>
+      <div class="meter"><span>Hi-hats</span><div class="bar"><i id="mHats"></i></div><b id="hHats" class="hit">●</b></div>
+      <div class="meter"><span>Tempo</span><strong id="mBpm">–</strong></div>
+    </div>
+    <div class="fields">
+      <label>Pulse on <select data-p="trigger"><option value="bass">Bass / kick only</option><option value="snare">Snare only</option><option value="hats">Hi-hats only</option><option value="any">Any beat</option></select></label>
+      <label>Look <select data-p="style">
+        <option value="flash">Flash and fade</option>
+        <option value="color_step">Change colour each beat (best at low update rates)</option>
+        <option value="burst">Burst from the centre</option>
+        <option value="spectrum">Bass, mid and treble across the strip</option>
+        <option value="energy">Flow that speeds up with loudness</option></select></label>
+      <label>Palette <select data-p="palette" class="palSelect"></select></label>
+      <label>Sensitivity <input type="range" data-p="sensitivity" min="0" max="1" step="0.05" value="0.5"></label>
+      <label>Fade-out <input type="range" data-p="decay_ms" min="80" max="1500" step="20" value="350"></label>
+      <label>Background glow <input type="range" data-p="floor" min="0" max="0.5" step="0.01" value="0.08"></label>
+      <label class="row"><input type="checkbox" data-p="predict" checked> Tempo lock: predict beats so pulses land on time</label>
+      <label>Listen to <select data-p="source"><option value="loopback">What's playing on this PC</option><option value="microphone">Microphone</option><option value="demo">Built-in demo track</option></select></label>
+    </div>
+  </div>
+  <div class="card" data-mode="screen" hidden>
+    <h2>Screen sync</h2>
+    <div class="fields">
+      <label>Screen area <select data-p="region">
+        <option value="full">Whole screen, left to right</option><option value="top">Top edge</option><option value="bottom">Bottom edge</option>
+        <option value="left">Left edge</option><option value="right">Right edge</option>
+        <option value="around">All the way round (strip behind monitor)</option><option value="average">One average colour</option></select></label>
+      <label>Monitor number <input type="number" data-p="monitor" min="1" max="8" value="1"></label>
+      <label>Edge depth <input type="range" data-p="depth" min="0.05" max="0.5" step="0.05" value="0.15"></label>
+      <label>Colour boost <input type="range" data-p="saturation" min="0.5" max="2.5" step="0.1" value="1.4"></label>
+      <label>Smoothing <input type="range" data-p="smoothing" min="0" max="0.9" step="0.05" value="0.5"></label>
+      <label>Intensity <input type="range" data-p="intensity" min="0.2" max="1" step="0.05" value="1"></label>
+    </div>
+  </div>
+  <div class="card" data-mode="animation" hidden>
+    <h2>Animations</h2>
+    <div class="fields">
+      <label>Animation <select data-p="animation" id="animSel"></select></label>
+      <label>Palette <select data-p="palette" class="palSelect"></select></label>
+      <label>Speed <input type="range" data-p="speed" min="0.05" max="2" step="0.05" value="0.5"></label>
+      <label>Size <input type="range" data-p="scale" min="0.2" max="4" step="0.1" value="1"></label>
+    </div>
+    <p class="muted">Tip: for ultra-smooth motion, use the Effects tab, which runs animations on the strip itself.</p>
+  </div>
+  <div class="card" data-mode="daylight" hidden>
+    <h2>Daylight white</h2>
+    <p class="muted">Warm and dim when you wake, bright and cool at midday, warm again before bed. Updates once a minute.</p>
+    <div class="fields">
+      <label>Wake time <input type="time" data-p="wake" value="07:00"></label>
+      <label>Bed time <input type="time" data-p="bed" value="23:00"></label>
+      <label>Max brightness <input type="range" data-p="max_brightness" min="10" max="100" value="100"></label>
+    </div>
+  </div>
+</section>
+
+<!-- SCHEDULES -->
+<section role="tabpanel" id="panel-schedules" aria-labelledby="tab-schedules" class="panel" hidden>
+  <div class="card">
+    <h2>Schedules</h2>
+    <p class="muted">Run while Tapo Studio is open. Tip: the "Sunrise" effect makes a great wake-up light.</p>
+    <div id="schedList" class="list"></div>
+  </div>
+  <div class="card">
+    <h2>New schedule</h2>
+    <form id="schedForm" class="form">
+      <label>Name <input type="text" id="schName" maxlength="40" value="Wake up"></label>
+      <label>Time <input type="time" id="schTime" value="07:00" required></label>
+      <fieldset class="days"><legend>Days</legend><div id="schDays"></div></fieldset>
+      <label>Action <select id="schAction"></select></label>
+      <label id="schSceneWrap">Scene <select id="schScene"></select></label>
+      <label id="schPresetWrap" hidden>Effect <select id="schPreset"></select></label>
+      <label id="schPlWrap" hidden>Playlist <select id="schPlaylist"></select></label>
+      <button type="submit" class="btn primary">Add schedule</button>
+    </form>
+  </div>
+</section>
+
+<!-- SETTINGS -->
+<section role="tabpanel" id="panel-settings" aria-labelledby="tab-settings" class="panel" hidden>
+  <div class="grid2">
+    <div class="card">
+      <h2>Tapo account</h2>
+      <p class="muted">The strips only accept local commands from someone who knows your Tapo login. It's stored encrypted on this PC and only ever sent to your strips, never anywhere else.</p>
+      <form id="credForm" class="form" autocomplete="off">
+        <label>Tapo email <input type="email" id="email" autocomplete="username" required></label>
+        <label>Tapo password <input type="password" id="password" autocomplete="current-password" placeholder="(unchanged)"></label>
+        <button type="submit" class="btn primary">Save and connect</button>
+      </form>
+      <details class="help"><summary>Can't connect?</summary>
+        <ul>
+          <li>The email and password are case-sensitive.</li>
+          <li>Your PC must be on the same Wi-Fi/network as the strip.</li>
+          <li>If you see "Login refused" or "FORBIDDEN": in the Tapo app go to Me → Third-Party Services → Third-Party Compatibility, switch it to the opposite setting, wait a minute, then press Reconnect.</li>
+          <li>Don't keep retrying a wrong password, because the strip can lock you out for a while.</li>
+        </ul>
+      </details>
+    </div>
+    <div class="card">
+      <h2>Lights</h2>
+      <p class="muted">L930 and L920 strips get every feature. Other Tapo bulbs and strips get the controls they support (see the README).</p>
+      <div id="devList" class="list"></div>
+      <div class="toolbar">
+        <button type="button" class="btn" id="discoverBtn">Search my network</button>
+        <button type="button" class="btn" id="reconnectBtn">Reconnect all</button>
+      </div>
+      <div id="discovered" class="list" aria-live="polite"></div>
+      <form id="addDevForm" class="form">
+        <h3>Add by IP address</h3>
+        <label>IP address <input type="text" id="devIp" inputmode="decimal" placeholder="192.168.1.50" required></label>
+        <label>Model <select id="devModel"></select></label>
+        <label>Name <input type="text" id="devName" maxlength="40" value="Tapo light"></label>
+        <label id="devSegWrap">Zones <input type="number" id="devSeg" min="1" max="100" value="50"></label>
+        <button type="submit" class="btn primary">Add light</button>
+      </form>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Troubleshooting</h2>
+    <p class="muted"><strong>Painting does nothing?</strong> Press <em>Fix painting</em>. Newer strip firmware needs a different request than older firmware, and the strip has to be asked which one it accepts. The app tries each in turn, shows a test pattern, and you say whether you see the left half red and the right half blue.</p>
+    <p class="muted"><em>Run diagnostics</em> checks each light and writes a report with no passwords, hardware IDs or full IP addresses, so it is safe to paste into a bug report.</p>
+    <div class="toolbar">
+      <button type="button" class="btn primary" id="fixBtn">Fix painting</button>
+      <button type="button" class="btn" id="diagBtn">Run diagnostics</button>
+      <button type="button" class="btn" id="diagCopy" hidden>Copy report</button>
+    </div>
+    <div id="wizard" class="status" role="status" aria-live="polite" hidden>
+      <p id="wizText"></p>
+      <div class="toolbar" id="wizButtons"></div>
+    </div>
+    <textarea id="diagOut" rows="10" readonly spellcheck="false" aria-label="Diagnostics report" hidden></textarea>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <h2>Preferences</h2>
+      <form id="prefsForm" class="form">
+        <label>Theme <select id="pTheme"><option value="auto">Match Windows</option><option value="dark">Dark</option><option value="light">Light</option></select></label>
+        <label>Max live updates per second <input type="number" id="pFps" min="0.5" max="10" step="0.5"></label>
+        <label class="row"><input type="checkbox" id="pTrans"> Let the strip fade between live frames</label>
+        <label class="row"><input type="checkbox" id="pJoin"> Treat all selected strips as one long strip in live modes</label>
+        <label>Music sync offset (ms, + = earlier) <input type="number" id="pOffset" min="-500" max="1000" step="10"></label>
+        <button type="submit" class="btn primary">Save preferences</button>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Privacy &amp; security</h2>
+      <ul class="checklist">
+        <li>Only this PC can open the control panel (it listens on 127.0.0.1).</li>
+        <li>Every request needs a secret key that changes each time the app starts.</li>
+        <li>Requests from other websites are blocked.</li>
+        <li>Your password is encrypted with your Windows account.</li>
+        <li>No accounts, cloud, tracking, cookies or outside scripts.</li>
+        <li>Only talks to devices on your home network.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+</main>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

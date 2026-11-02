@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Python ${{ matrix.python }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install (this also installs the real `tapo` library)
+        run: python -m pip install -e ".[dev]"
+      - name: Run the tests
+        run: python -m pytest
+
+  package:
+    name: Build the package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build a wheel
+        run: python -m pip wheel . --no-deps -w dist
+      - name: Check the web files and data are inside it
+        run: |
+          python - <<'PY'
+          import glob, zipfile
+          names = zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist()
+          for needed in ("static/index.html", "static/app.js", "static/app.css", "data/lighting_presets.json", "data/segment_presets.json"):
+              assert any(n.endswith(needed) for n in names), f"missing {needed}"
+          print("wheel contents OK")
+          PY
