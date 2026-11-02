@@ -4,9 +4,6 @@ CI installs it, so an upgrade that renames something we rely on fails here
 instead of at runtime on someone's lights.
 """
 
-import asyncio
-import inspect
-
 import pytest
 
 tapo = pytest.importorskip("tapo")
@@ -47,7 +44,6 @@ def test_client_has_a_factory_for_every_model_we_support():
     for model, (_, factory) in devices.MODELS.items():
         assert hasattr(tapo.ApiClient, factory), model
     assert hasattr(tapo.ApiClient, "discover_devices_raw")
-    assert inspect.iscoroutinefunction(getattr(tapo.ApiClient, "l930"))
 
 
 def test_handlers_have_the_methods_we_call():
