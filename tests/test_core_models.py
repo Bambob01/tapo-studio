@@ -335,3 +335,55 @@ def test_when_nothing_works_the_user_is_told_what_to_press(make_core):
         r = await core.action([s.id], "paint", {"colors": [[0, 100, 100]]})
         assert "Fix painting" in r["warnings"][0]
     run(go())
+
+
+# ---- custom effects on newer firmware --------------------------------------
+
+CUSTOM = {"type": "sequence", "sequence": [[0, 100, 100], [120, 100, 100], [240, 100, 100]]}
+
+
+def test_custom_effect_heals_itself_on_newer_firmware(make_core):
+    async def go():
+        core = await make_core()
+        s = first_strip(core)
+        core.backend.custom_lighting_ignored = True
+        r = await core.action([s.id], "effect", {"effect": CUSTOM})
+        assert r["warnings"] == [], r
+        sent = [p for _, w, p in core.backend.sent if w == "segment_custom"][-1]
+        assert sent["type"] == "circulating" and len(sent["states"]) == len(sent["segments"]) == 3
+        assert sent["segments"][-1] == s.segments - 1
+        n = len(core.backend.sent)                       # next time goes straight to the working route
+        await core.action([s.id], "effect", {"effect": CUSTOM})
+        assert "set_lighting_effect" not in [w for _, w, _ in core.backend.sent[n:]]
+    run(go())
+
+
+def test_custom_effect_falls_back_to_still_colours_and_says_so(make_core):
+    async def go():
+        core = await make_core()
+        s = first_strip(core)
+        core.backend.custom_lighting_ignored = True
+        core.backend.segment_accept = lambda d: d["type"] == "none"
+        r = await core.action([s.id], "effect", {"effect": CUSTOM})
+        assert "without animation" in r["warnings"][0]
+    run(go())
+
+
+def test_custom_effect_refused_everywhere_is_reported(make_core):
+    async def go():
+        core = await make_core()
+        s = first_strip(core)
+        core.backend.custom_lighting_ignored = True
+        core.backend.segment_accept = lambda d: False
+        r = await core.action([s.id], "effect", {"effect": CUSTOM})
+        assert "not showing it" in r["warnings"][0]
+    run(go())
+
+
+def test_custom_effect_on_normal_firmware_is_unchanged(make_core):
+    async def go():
+        core = await make_core()
+        s = first_strip(core)
+        r = await core.action([s.id], "effect", {"effect": CUSTOM})
+        assert r["warnings"] == [] and "segment_custom" not in [w for _, w, _ in core.backend.sent]
+    run(go())

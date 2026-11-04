@@ -532,8 +532,8 @@ function renderLive() {
   $('#liveStatus').classList.toggle('err', !!L.error);
   const m = L.music;
   if (m) {
-    $('#mBass').style.width = m.levels.bass * 100 + '%'; $('#mSnare').style.width = m.levels.snare * 100 + '%'; $('#mHats').style.width = m.levels.hats * 100 + '%';
-    $('#hBass').classList.toggle('on', m.hits.bass < 0.15); $('#hSnare').classList.toggle('on', m.hits.snare < 0.15); $('#hHats').classList.toggle('on', m.hits.hats < 0.15);
+    $('#mBass').style.width = m.levels.bass * 100 + '%'; $('#mSnare').style.width = m.levels.snare * 100 + '%'; $('#mHats').style.width = m.levels.hats * 100 + '%'; $('#mVocals').style.width = m.levels.vocals * 100 + '%';
+    $('#hVocals').classList.toggle('on', m.singing); $('#hBass').classList.toggle('on', m.hits.bass < 0.15); $('#hSnare').classList.toggle('on', m.hits.snare < 0.15); $('#hHats').classList.toggle('on', m.hits.hats < 0.15);
     $('#mBpm').textContent = m.bpm ? `${Math.round(m.bpm)} BPM ${m.locked ? '(locked)' : '(listening…)'}` : 'listening…';
   }
 }

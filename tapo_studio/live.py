@@ -240,9 +240,15 @@ class MusicSource:
     def triggers(self, p, t_target) -> list[float]:
         band = p.get("trigger", "bass")
         use_pred = p.get("predict", True) and band in ("bass", "any") and self.an.locked()
-        if use_pred:
-            return self.an.beat_times(t_target - 3, t_target)
-        return [h for h, _ in self.an.recent_hits(band, t_target - 3)]
+        hits = [h for h, _ in self.an.recent_hits(band, t_target - 3)]
+        if not use_pred:
+            return hits
+        # Real hits always count, so fast playing between beats isn't lost. Predicted
+        # beats only fill in while real hits are still arriving near them.
+        period = self.an.period
+        beats = [b for b in self.an.beat_times(t_target - 3, t_target)
+                 if any(b - 2 * period <= h <= b + 0.1 for h in hits) or (hits and hits[-1] > t_target - 2 * period)]
+        return sorted(beats + [h for h in hits if all(abs(h - b) > 0.06 for b in beats)])
 
     def render(self, t_target, n, p):
         self.an.sensitivity = float(p.get("sensitivity", 0.5))
@@ -256,6 +262,8 @@ class MusicSource:
             self.beat_index += 1
             self._last_trigger = last
         env = math.exp(-(t_target - last) / decay) if last > 0 else 0.0
+        if p.get("trigger") == "vocals":
+            env = max(env, self.an.level["vocals"])     # singing is continuous, so follow it
         col = pal[self.beat_index % len(pal)]
         lv = self.an.level
         if style == "color_step":

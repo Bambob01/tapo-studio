@@ -3,14 +3,15 @@
 No machine learning needed. Each hop (~23 ms) we:
 
 1. FFT the latest window and split it into bands:
-   bass/kick 40-150 Hz, snare 150-250 Hz body + 1.5-5 kHz crack, hats 6-14 kHz.
+   bass/kick 40-150 Hz, snare crack 1.5-5 kHz, hats 6-14 kHz, vocals 300-3400 Hz.
 2. Measure *spectral flux* per band, which is how much louder the band got
    since the last hop. A steady bass line has low flux and a kick drum has a
    spike.
 3. Fire a hit when the flux jumps above the band's own recent average by a
    sensitivity-scaled margin (adaptive threshold, so quiet and loud songs
-   both work), with a per-band refractory period.
-4. Autocorrelate the bass onset envelope over the last ~6 s to find the tempo,
+   both work), with a per-band refractory period. The attack must also be big
+   next to the band's recent hits, which rejects bass notes and stray clicks.
+4. Autocorrelate the drum onset envelope over the last ~6 s to find the tempo,
    then run a small phase-locked loop on the hits so we can *predict* the next
    beat. That prediction lets the app send the pulse early enough to arrive on
    time, because the strip takes ~0.3 s to apply each command.
@@ -26,10 +27,16 @@ import numpy as np
 
 BANDS = {
     "bass": [(40, 150)],
-    "snare": [(150, 250), (1500, 5000)],
+    "snare": [(1500, 5000)],
     "hats": [(6000, 14000)],
+    "vocals": [(300, 3400)],
 }
-REFRACTORY = {"bass": 0.22, "snare": 0.15, "hats": 0.09}
+DRUMS = ("bass", "snare", "hats")
+REFRACTORY = {"bass": 0.18, "snare": 0.15, "hats": 0.09, "vocals": 0.18}
+# How big a hit must be next to the band's biggest recent hit, at sensitivity 0
+# and 1. Real drums are the loudest attacks in their band, so this is what
+# separates a kick from a bass note, or a snare from a kick's click.
+STRENGTH = {"bass": (0.75, 0.3), "snare": (0.75, 0.3), "hats": (0.25, 0.05)}
 
 
 class BeatAnalyzer:
@@ -43,8 +50,30 @@ class BeatAnalyzer:
             b: np.any([(freqs >= lo) & (freqs < hi) for lo, hi in rngs], axis=0)
             for b, rngs in BANDS.items()
         }
-        self.crack_mask = (freqs >= 1500) & (freqs < 5000)
-        self.crack_hist: deque[float] = deque(maxlen=4)
+        self.attack_peak = {b: 1e-6 for b in DRUMS}
+        self.attack_decay = 0.5 ** (hop / samplerate / 3.0)   # halves every 3 s
+        # Fast kick detector: works on the waveform at ~1.4 kHz, because the 46 ms
+        # FFT window can't separate kicks that land 75-125 ms apart.
+        self.dec = 32
+        fs = samplerate / self.dec
+        w0 = 2 * np.pi * 85 / fs
+        alpha = np.sin(w0) / (2 * 0.8)                # band-pass around 85 Hz
+        self.bq = (alpha / (1 + alpha), -alpha / (1 + alpha),
+                   -2 * np.cos(w0) / (1 + alpha), (1 - alpha) / (1 + alpha))
+        self.bq_state = [0.0, 0.0, 0.0, 0.0]
+        self.fs = fs
+        self.low_sq = np.zeros(int(0.08 * fs))        # recent squared band signal
+        self.low_env = np.zeros(int(0.08 * fs))
+        self.fast_peak = 1e-6
+        self.fast_armed = True
+        self.fast_frac, self.fast_gate, self.fast_window = 0.45, 1.6, 0.17
+        self.fast_start, self.fast_run = 0.99, False
+        self.vocal_share = 0.2
+        self.vocal_bg = None                         # slow per-frequency background
+        self.vocal_recent: deque[float] = deque(maxlen=5)
+        self.vocal_peak = 1e-6
+        self.vocal_on = False
+        self.vocal_quiet = 0.0
         self.buf = np.zeros(window, dtype=np.float32)
         self.prev = {b: None for b in BANDS}
         hist = int(1.2 * samplerate / hop)            # ~1.2 s of flux history
@@ -60,7 +89,7 @@ class BeatAnalyzer:
 
         rate = samplerate / hop                      # onset envelope sample rate (Hz)
         self.env_rate = rate
-        self.env = deque(maxlen=int(6 * rate))       # bass onset envelope, 6 s
+        self.env = deque(maxlen=int(8 * rate))       # drum onset envelope, 8 s
         self.bpm = 0.0
         self.confidence = 0.0
         self.period = 0.0
@@ -87,11 +116,10 @@ class BeatAnalyzer:
         mag = np.abs(np.fft.rfft(x))
         logmag = np.log1p(mag * 50)
         k = 2.6 - 2.0 * self.sensitivity            # threshold in std-devs above mean
-        crack = float(np.mean(mag[self.crack_mask]))
-        crack_rise = crack / (sum(self.crack_hist) / len(self.crack_hist) + 1e-9) if self.crack_hist else 0.0
-        self.crack_hist.append(crack)
         with self.lock:
-            for b, mask in self.masks.items():
+            onset = 0.0
+            for b in DRUMS:
+                mask = self.masks[b]
                 band = logmag[mask]
                 energy = float(np.mean(mag[mask]))
                 self.peak[b] = max(energy, self.peak[b] * 0.9993)
@@ -99,39 +127,113 @@ class BeatAnalyzer:
                 prev = self.prev[b]
                 flux = 0.0 if prev is None else float(np.sum(np.maximum(band - prev, 0)) / len(band))
                 self.prev[b] = band
+                re = self.recent_energy[b]
+                base = sum(re) / len(re) if re else 0.0
+                attack = max(0.0, energy - base) if re else 0.0
+                self.attack_peak[b] = max(attack, self.attack_peak[b] * self.attack_decay)
                 hist = self.flux_hist[b]
                 if len(hist) > 10 and not silent:
                     arr = np.fromiter(hist, float)
-                    thr = arr.mean() + k * arr.std() + 1e-3
+                    # Median-based, so the hits themselves don't raise the bar.
+                    med = float(np.median(arr))
+                    thr = med + k * 1.4826 * float(np.median(np.abs(arr - med))) + 1e-3
                     # The analysis window spots a hit ~18 ms after it starts.
                     th = t - 0.018
+                    lo, hi = STRENGTH[b]
+                    big = attack > (lo + (hi - lo) * self.sensitivity) * self.attack_peak[b]
                     # Percussive gate: a real hit makes the band suddenly *louder*.
-                    # A bassline changing note shifts energy between bins but
-                    # barely changes the total, so it doesn't pass.
-                    re = self.recent_energy[b]
-                    rise = energy / (sum(re) / len(re) + 1e-9) if re else 0.0
-                    gate = 1.45 - 0.5 * self.sensitivity
-                    if b == "snare":
-                        # A snare has a noisy "crack" up at 1.5-5 kHz. Bass notes
-                        # and kicks leak into the snare body band but lack it.
-                        rise = min(rise, crack_rise)
-                    if flux > thr and rise > gate and th - self.last_hit[b] > REFRACTORY[b]:
-                        strength = min(1.0, (flux - thr) / (thr + 1e-9) + 0.4)
+                    rise = energy / (base + 1e-9) if re else 0.0
+                    gate = 1.3 - 0.3 * self.sensitivity
+                    if flux > thr and big and rise > gate and th - self.last_hit[b] > REFRACTORY[b]:
+                        strength = min(1.0, 0.4 + 0.6 * attack / self.attack_peak[b])
                         self.last_hit[b] = th
                         self.hits.append((th, b, strength))
                         if b == "bass":
                             self._pll(th)
                 hist.append(flux)
-                self.recent_energy[b].append(energy)
-                if b == "bass":
-                    self.env.append(flux)
+                re.append(energy)
+                onset += attack / self.attack_peak[b]
+            self.env.append(onset)
+            self._vocals(mag, t, silent)
+            self._fast_bass(self.buf[-self.hop:], t, silent)
             self._hops += 1
             if self._hops % 20 == 0:
                 self._tempo()
 
+    # -- fast bass --------------------------------------------------------
+    def _fast_bass(self, chunk: np.ndarray, t: float, silent: bool):
+        """Fills in fast runs. The main detector finds the kicks; this only adds a hit
+        that lands too soon after another for the main detector to separate, so a
+        bass note on its own can never trigger it."""
+        d = chunk[:len(chunk) // self.dec * self.dec].reshape(-1, self.dec).mean(axis=1)
+        b0, b2, a1, a2 = self.bq
+        x1, x2, y1, y2 = self.bq_state
+        out = np.empty(len(d))
+        for i, x in enumerate(d):
+            y = b0 * x + b2 * x2 - a1 * y1 - a2 * y2
+            x2, x1, y2, y1 = x1, float(x), y1, y
+            out[i] = y
+        self.bq_state = [x1, x2, y1, y2]
+        width = int(0.016 * self.fs)                  # about one cycle of a low note
+        back, skip = int(0.045 * self.fs), int(0.006 * self.fs)
+        decay = 0.5 ** (1 / self.fs / 3.0)
+        frac = self.fast_frac + 0.2 * (0.5 - self.sensitivity)
+        gate = self.fast_gate - 0.3 * (self.sensitivity - 0.5)
+        for i, y in enumerate(out):
+            self.low_sq = np.roll(self.low_sq, -1)
+            self.low_sq[-1] = y * y
+            env = float(np.sqrt(self.low_sq[-width:].mean()))
+            self.low_env = np.roll(self.low_env, -1)
+            self.low_env[-1] = env
+            base = float(self.low_env[-back:-skip].min())
+            attack = env - base
+            self.fast_peak = max(attack, self.fast_peak * decay)
+            # The first fill-in of a run must be as big as a full kick; once a run is going, less will do.
+            need = (frac if self.fast_run else max(frac, self.fast_start)) * self.fast_peak
+            if attack < 0.5 * need:
+                self.fast_armed = True
+            if self.fast_armed and not silent and attack > need and env > gate * base:
+                th = t - (len(out) - 1 - i) / self.fs - 0.012
+                gap = th - self.last_hit["bass"]
+                self.fast_run = self.fast_run and gap < self.fast_window
+                if 0.06 < gap < self.fast_window:
+                    self.fast_armed = False
+                    self.fast_run = True
+                    self.last_hit["bass"] = th
+                    self.hits.append((th, "bass", min(1.0, 0.4 + 0.6 * attack / self.fast_peak)))
+
+    # -- vocals -----------------------------------------------------------
+    def _vocals(self, mag: np.ndarray, t: float, silent: bool):
+        """Find singing: pitched peaks in the voice range that aren't steady.
+
+        Drums are noise rather than pitched peaks, and pads and held synths
+        sink into the slow background. This can't tell a voice from a lead
+        guitar or synth melody, because they look the same in a mono mix."""
+        m = mag[self.masks["vocals"]]
+        if self.vocal_bg is None:
+            self.vocal_bg = np.zeros_like(m)
+        smooth = np.convolve(m, np.ones(9) / 9, "same")
+        peaks = np.maximum(m - 1.5 * smooth, 0)                   # pitched, not noise
+        moved = np.maximum(peaks - self.vocal_bg, 0)              # new, not steady
+        self.vocal_bg += (peaks - self.vocal_bg) * 0.02
+        self.vocal_recent.append(float(moved.sum()))
+        v = float(np.median(self.vocal_recent))                   # a drum hit is too brief to count
+        self.vocal_peak = max(v, self.vocal_peak * 0.999)
+        share = v / (float(m.sum()) + 1e-9)            # how much of the voice range is new pitched sound
+        ratio = 0.0 if silent or share < self.vocal_share else v / (self.vocal_peak + 1e-9)
+        self.level["vocals"] = 0.7 * self.level["vocals"] + 0.3 * min(1.0, ratio)
+        on = 0.5 - 0.35 * self.sensitivity
+        floor = min(self.vocal_recent)
+        self.vocal_quiet = self.vocal_quiet + self.hop / self.sr if ratio < on * 0.5 else 0.0
+        self.vocal_on = self.vocal_quiet < 0.3 and (self.vocal_on or ratio > on)
+        th = t - 0.05
+        if ratio > on and v > 1e-3 and v > 1.3 * floor and th - self.last_hit["vocals"] > REFRACTORY["vocals"]:
+            self.last_hit["vocals"] = th
+            self.hits.append((th, "vocals", min(1.0, 0.4 + ratio)))
+
     # -- tempo ------------------------------------------------------------
     def _tempo(self):
-        if len(self.env) < self.env_rate * 3:
+        if len(self.env) < self.env_rate * 2.5:
             return
         e = np.fromiter(self.env, float)
         e = e - e.mean()
@@ -145,6 +247,10 @@ class BeatAnalyzer:
         # Weight towards the 100-130 BPM range most music lives in, to avoid
         # locking onto half or double tempo.
         lags = np.arange(lo, hi)
+        # A true beat also lines up with the bar, so reward lags that repeat
+        # at 2x and 4x. Off-beat patterns only match at one lag.
+        seg = np.maximum(seg, 0) + 0.5 * np.maximum(ac[np.minimum(lags * 2, len(ac) - 1)], 0) \
+            + 0.5 * np.maximum(ac[np.minimum(lags * 4, len(ac) - 1)], 0)
         bpms = 60 * self.env_rate / lags
         weight = np.exp(-0.5 * ((np.log2(bpms / 120)) / 0.6) ** 2)
         idx = int(np.argmax(seg * weight))
@@ -154,7 +260,8 @@ class BeatAnalyzer:
             denom = a - 2 * b + c
             if denom:
                 lag += 0.5 * (a - c) / denom
-        conf = float(seg[idx] / ac[0])
+        li = int(round(lag))
+        conf = float(ac[li] / ac[0]) * len(e) / (len(e) - li)   # undo the shorter overlap at long lags
         bpm = 60 * self.env_rate / lag
         self.confidence = 0.8 * self.confidence + 0.2 * max(0.0, min(1.0, conf * 2))
         self.bpm = bpm if not self.bpm else 0.8 * self.bpm + 0.2 * bpm
@@ -192,7 +299,8 @@ class BeatAnalyzer:
 
     def recent_hits(self, band: str, since: float) -> list[tuple[float, float]]:
         with self.lock:
-            return [(t, s) for t, b, s in self.hits if t >= since and (band == "any" or b == band)]
+            return [(t, s) for t, b, s in self.hits
+                    if t >= since and (b == band or (band == "any" and b in DRUMS))]
 
     def snapshot(self) -> dict:
         with self.lock:
@@ -204,6 +312,7 @@ class BeatAnalyzer:
                 "confidence": round(self.confidence, 2),
                 "locked": self.locked(),
                 "hits": {b: round(now - self.last_hit[b], 2) for b in BANDS},
+                "singing": self.vocal_on,
             }
 
 

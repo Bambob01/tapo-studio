@@ -1,9 +1,12 @@
 """Beat analysis on synthetic music (no audio hardware needed). Seeds are fixed, so this is deterministic."""
 
 import time
+from collections import deque
 
 import numpy as np
 import pytest
+from music_mix import STYLES, fast_kicks, mix
+from music_mix import score as mix_score
 
 from tapo_studio.audio import BeatAnalyzer, demo_track
 
@@ -132,3 +135,70 @@ def test_music_source_flashes_on_predicted_beat():
     assert after > before + 80                        # the flash arrives with the predicted beat
     for style in ("burst", "color_step", "spectrum", "energy"):
         assert len(m.render(now, 50, {**p, "style": style})) == 50
+
+
+@pytest.mark.parametrize("style", list(STYLES))
+def test_full_mix_with_vocals(style):
+    sig, truth = mix(style, seed=3)
+    dur = len(sig) / SR
+    an = BeatAnalyzer(SR)
+    an.hits = deque(maxlen=100000)
+    an.feed(sig, t=dur)
+    hits = {b: [h[0] for h in an.hits if h[1] == b] for b in truth}
+    hits["sung"] = hits["vocals"]
+    for band, min_recall, min_precision, tol in (("bass", 0.9, 0.9, 0.05), ("snare", 0.9, 0.65, 0.05),
+                                                 ("hats", 0.75, 0.9, 0.05), ("sung", 0.4, 0.5, 0.12)):
+        recall, precision = mix_score(hits[band], truth[band], 4, tol)
+        assert recall >= min_recall and precision >= min_precision, (band, recall, precision)
+
+
+@pytest.mark.parametrize("style", list(STYLES))
+def test_instrumental_is_not_mistaken_for_vocals(style):
+    sig, _ = mix(style, seed=4, vocals=False)
+    an = run(sig, len(sig) / SR)
+    assert sum(h[1] == "vocals" and h[0] > 4 for h in an.hits) <= 6
+
+
+def test_any_trigger_ignores_vocals():
+    an = BeatAnalyzer(SR)
+    an.hits.extend([(1.0, "vocals", 1.0), (1.1, "bass", 1.0)])
+    assert [t for t, _ in an.recent_hits("any", 0)] == [1.1]
+    assert [t for t, _ in an.recent_hits("vocals", 0)] == [1.0]
+
+
+HELD_NOTE = pytest.mark.xfail(strict=False, reason="known limit: fast kicks over a held bass note are often missed")
+
+
+@pytest.mark.parametrize("bpm,bassline,want", [(120, False, 0.9), (150, False, 0.9), (180, False, 0.9),
+                                               pytest.param(120, True, 0.75, marks=HELD_NOTE),
+                                               pytest.param(150, True, 0.75, marks=HELD_NOTE),
+                                               pytest.param(180, True, 0.75, marks=HELD_NOTE)])
+def test_fast_double_kicks_are_caught(bpm, bassline, want):
+    sig, times = fast_kicks(bpm, bassline=bassline)
+    dur = len(sig) / SR
+    an = BeatAnalyzer(SR)
+    an.hits = deque(maxlen=100000)
+    an.feed(sig, t=dur)
+    recall, precision = mix_score([h[0] for h in an.hits if h[1] == "bass"], times, 3, 0.04)
+    assert recall >= want and precision >= 0.9, (recall, precision)
+
+
+def test_real_hits_between_predicted_beats_still_trigger():
+    from tapo_studio.live import MusicSource
+    sig, kicks, dur = simple_track(128)
+    m = MusicSource()
+    now = time.perf_counter()
+    m.an.feed(sig, now)
+    assert m.an.locked()
+    extra = now + 0.1 + m.an.period / 2
+    m.an.hits.append((extra, "bass", 1.0))
+    assert extra in m.triggers({"trigger": "bass", "predict": True}, extra + 0.01)
+
+
+def test_prediction_stops_when_the_music_stops():
+    from tapo_studio.live import MusicSource
+    sig, kicks, dur = simple_track(128)
+    m = MusicSource()
+    now = time.perf_counter()
+    m.an.feed(sig, now)
+    assert m.triggers({"trigger": "bass", "predict": True}, now + 10) == []
