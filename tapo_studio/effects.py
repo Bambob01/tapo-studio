@@ -222,6 +222,22 @@ def variant_kind(key: str) -> str:
     return "lighting"
 
 
+# Closest scene animation for each custom effect type, for firmware that ignores custom lighting effects.
+SCENE_TYPES = {"sequence": "circulating", "pulse": "breathe", "random": "flicker"}
+
+
+def scene_from_lighting(e: dict, zones: int, animated: bool = True) -> dict:
+    """The same colours as a scene request: equal bands along the strip, one colour each."""
+    seq = [list(c)[:3] for c in (e.get("sequence") or e.get("backgrounds") or e.get("display_colors")
+                                 or e.get("init_states") or [[0, 0, 100]])][:max(1, zones)]
+    n = len(seq)
+    ends = sorted({max(0, (i + 1) * zones // n - 1) for i in range(n)})
+    return {"name": str(e.get("name") or "Tapo Studio"),
+            "type": SCENE_TYPES.get(e.get("type"), "none") if animated else "none",
+            "brightness": _clamp(e.get("brightness", 100), 1, 100),
+            "states": [c + [0] for c in seq[:len(ends)]], "segments": ends, "id": prefixed_id()}
+
+
 def prefixed_id() -> str:
     """An id shaped like the built-in ones ('TapoStrip_' + 22 letters/digits)."""
     import secrets

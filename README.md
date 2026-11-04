@@ -8,7 +8,7 @@
 
 ![Smart music mode locked to a 124 BPM track](docs/screenshots/music.png)
 
-> **Known issue:** on newer firmware (1.4.x) the Effects tab's *custom* effects may be ignored in the same way painting used to be (the built-in effects work through a different route). Painting now adapts automatically; the custom effect editor doesn't yet.
+> **Newer firmware (1.4.x):** custom effects are sent the way that firmware accepts, using the closest scene animation, so they may look a little different from the editor. If the light refuses the animation, the app shows the colours still and tells you.
 >
 > **Status: alpha.** It was built and tested against a simulated light and a strict model of the [`tapo`](https://github.com/mihai-dinculescu/tapo) library, and it has not yet had wide testing on real hardware. If you try it on your lights, please [tell us how it went](https://github.com/Bambob01/tapo-studio/issues/new?template=device_report.yml). That's how the table below gets verified.
 
@@ -19,7 +19,7 @@
 | **Paint every zone** | Colour each of the L930's 50 zones (10 cm each) by mouse or keyboard, turn zones off, shift/mirror/reverse, and blend gradients in a perceptual colour space so they stay vivid instead of going muddy. Pull a palette from any photo. |
 | **Edit every effect** | All 17 TP-Link effects, editable. 14 extra effects (candle, fireplace, fireflies, lava lamp, northern lights...). An effect editor that exposes every setting the strip accepts: unlimited colours (the app stops at 8), fade times in milliseconds, spread, direction, random hue/saturation/brightness ranges. Raw JSON import and export. |
 | **Scenes & playlists** | All 55 built-in scene animations, your own saved scenes, and playlists that cycle through them. |
-| **Smart music** | Reacts to what's playing on your PC. Separate **kick/bass**, **snare** and **hi-hat** detection, so you can pulse on the bass only. It auto-adjusts to quiet and loud songs, finds the tempo and **predicts the next beat**, so pulses land on time even though the strip takes ~0.3 s to respond. |
+| **Smart music** | Reacts to what's playing on your PC. Separate **kick/bass**, **snare**, **hi-hat** and **vocal** detection, so you can pulse on the bass only. It auto-adjusts to quiet and loud songs, finds the tempo and **predicts the next beat**, so pulses land on time even though the strip takes ~0.3 s to respond. |
 | **Screen sync** | Ambilight-style: the strip follows the colours at the edge of your screen. |
 | **Daylight white** | Warm and dim when you wake, cool and bright at midday, warm again before bed. |
 | **Schedules** | Run scenes, effects, playlists or on/off at set times. The built-in Sunrise effect makes a good wake-up light. |

@@ -318,6 +318,24 @@ class Core:
                 d["apply_mode"] = apply_mode
             self.store.save()
 
+    async def _effect_as_scene(self, s: Strip, e: dict, failed: str | None = None) -> str | None:
+        """Newer firmware ignores custom lighting effects, so send the effect as a scene instead. The light's
+        read-back decides: first the closest animation, then still colours. Returns a warning, or None."""
+        for animated in (True, False):
+            eff = fx.scene_from_lighting(e, s.segments, animated)
+            try:
+                await self.backend.segment_custom(s, eff)
+                if not self._scene_showing(await self.backend.refresh(s), eff):
+                    continue
+            except Exception as ex:
+                log.info("Scene-style effect not accepted by %s: %s", s.name, ex)
+                continue
+            self._set_paint_method(s, "segment-none-indexed", "fixed")
+            s.mode, s.last_effect, s.on = "effect", eff, True
+            return None if animated else (f"{s.name}: this firmware can't run this custom effect, "
+                                          "so its colours are shown without animation.")
+        return failed or f"{s.name} did not accept this custom effect. The built-in effects should still work."
+
     def _remember_mode(self, s: Strip, mode: str):
         order = ("fixed", "fresh", "clear")
         if order.index(mode) > order.index(s.apply_mode):
@@ -534,12 +552,15 @@ class Core:
                 raise UserError(str(ex))
 
             async def f(s):
+                if fx.variant_kind(s.paint_method) == "segment":
+                    return await self._effect_as_scene(s, e)        # this light is known to ignore the usual route
                 eff = {**e, "id": fx.new_id()} if s.apply_mode != "fixed" else e
                 if s.apply_mode == "clear":
                     await self._clear_effects(s, e.get("brightness", 100))
                 await b.lighting(s, eff)
                 s.mode, s.last_effect, s.on = "effect", eff, True
-                return await self._confirm_effect(s, eff)
+                warn = await self._confirm_effect(s, eff)
+                return await self._effect_as_scene(s, e, warn) if warn and "zones" in s.caps else warn
         elif kind == "lighting_preset":
             preset = fx.preset_lighting(str(p.get("name", "")))
             if not preset:

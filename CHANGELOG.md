@@ -7,6 +7,10 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 First public release (alpha).
 
 ### Added
+- **Vocals in Smart music.** A new meter and a "Vocals only" pulse option that follows the singing. It reacts to melody, so a lead guitar or synth can trigger it too.
+- **Fast bass.** A separate fine-grained kick detector follows double kicks, and real hits now always count alongside predicted beats. Predicted beats stop when the music does.
+- **Better drum detection.** Bass notes, kick clicks and hi-hats no longer set off the wrong trigger as often, and tempo finding now uses all the drums.
+- **Custom effects on newer firmware.** If a light ignores a custom effect, it is resent as the closest scene animation, or as still colours with a warning.
 - **Painting on newer firmware.** Strips on firmware 1.4.x (seen on an L930-5, 1.4.3) accept the usual painting request but never apply it. If the read-back shows that, the app now switches to the scene (segment) request, which that firmware does apply (type `none`, one colour per zone, at most 4 display colours), and remembers it. Live modes and brightness changes use it too.
 - **Fix painting** (Settings → Troubleshooting): a guided test that tries each way of painting, reports what the light itself says and any error it returns, and lets you confirm the red/blue test pattern.
 - Local web control panel for Tapo L930 and L920 light strips: colour, white, per-zone painting, gradients (Oklab), palettes (including from a photo).

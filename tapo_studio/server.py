@@ -305,7 +305,7 @@ def build_app(core: Core, port: int, token: str) -> Starlette:
     LIVE_NUM = {"speed": (0.01, 5), "scale": (0.1, 10), "monitor": (1, 8), "depth": (0.02, 0.5),
                 "saturation": (0, 3), "smoothing": (0, 0.95), "intensity": (0, 1), "sensitivity": (0, 1),
                 "decay_ms": (50, 3000), "floor": (0, 1), "max_brightness": (1, 100)}
-    LIVE_ENUM = {"trigger": {"bass", "snare", "hats", "any"},
+    LIVE_ENUM = {"trigger": {"bass", "snare", "hats", "vocals", "any"},
                  "style": {"flash", "color_step", "burst", "spectrum", "energy"},
                  "source": {"loopback", "microphone", "demo"},
                  "region": {"full", "top", "bottom", "left", "right", "around", "average"}}
