@@ -6,6 +6,10 @@
 [![License: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)
 
+https://github.com/user-attachments/assets/a7111210-1ab0-46ce-b4cf-782935c5a8e8
+
+Real footage: an L930-5 strip driven by Tapo Studio. Contains flashing lights.
+
 ![Smart music mode locked to a 124 BPM track](docs/screenshots/music.png)
 
 > **Newer firmware (1.4.x):** custom effects are sent the way that firmware accepts, using the closest scene animation, so they may look a little different from the editor. If the light refuses the animation, the app shows the colours still and tells you.
