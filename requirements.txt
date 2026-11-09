@@ -1,6 +1,6 @@
 # Exact versions. start.bat installs prebuilt wheels only (--only-binary), so no
 # third-party build scripts ever run on your PC.
-tapo==0.12.1
+tapo==0.12.2
 tzdata>=2026.6
 starlette==1.10.0
 anyio==4.15.1
