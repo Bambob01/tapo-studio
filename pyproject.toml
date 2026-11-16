@@ -26,7 +26,7 @@ classifiers = [
     "Topic :: Home Automation",
 ]
 dependencies = [
-    "tapo>=0.12,<0.13",
+    "tapo>=0.12,<0.14",
     "starlette>=1.0,<2",
     "uvicorn>=0.30,<1",
     "numpy>=2.0,<3",
